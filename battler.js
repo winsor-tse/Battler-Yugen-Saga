@@ -2,6 +2,114 @@ if (!Date.now) {
     Date.now = function() { return new Date().getTime(); }
 }
 
+//New
+const logWorldStateForAI = () => {
+    const player = getPlayer();
+    const rawEntities = getRegistry().entities;
+    const entities = Object.values(rawEntities);
+
+    const worldState = {
+        timestamp: Date.now(),
+        player: {
+            id: player.id,
+            name: player.name,
+            mapX: player.mapX,
+            mapY: player.mapY,
+            direction: player.direction,
+            hp: player.hp,
+            maxHp: player.maxHp,
+            mp: player.mp,
+            maxMp: player.maxMp,
+        },
+        entities: entities.map(entity => ({
+            id: entity.id,
+            name: entity.name,
+            type: entity.type,
+            isCurrentPlayer: entity.isCurrentPlayer,
+            mapX: entity.mapX,
+            mapY: entity.mapY,
+            hp: entity.hp,
+            maxHp: entity.maxHp,
+            mp: entity.mp,
+            maxMp: entity.maxMp,
+            distance: getDistance(entity.mapX, entity.mapY)
+        }))
+    };
+    //console.log("World State for AI:", JSON.stringify(worldState, null, 2));
+};
+
+//New
+const sendWorldStateToAI = async () => {
+    const player = getPlayer();
+    const rawEntities = getRegistry().entities;
+    const entities = Object.values(rawEntities);
+
+    const worldState = {
+        timestamp: Date.now(),
+        player: {
+            id: player.id,
+            mapX: player.mapX,
+            mapY: player.mapY,
+            direction: player.direction,
+            hp: player.hp,
+            maxHp: player.maxHp,
+            mp: player.mp,
+            maxMp: player.maxMp,
+        },
+        entities: entities.map(e => ({
+            id: e.id,
+            mapX: e.mapX,
+            mapY: e.mapY,
+            type: e.type,
+            isCurrentPlayer: e.isCurrentPlayer,
+            mapX: e.mapX,
+            mapY: e.mapY,
+            hp: e.hp,
+            maxHp: e.maxHp,
+            mp: e.mp,
+            maxMp: e.maxMp,
+            distance: getDistance(e.mapX, e.mapY)
+        }))
+    };
+
+try {
+    const obsRes = await fetch("http://127.0.0.1:6060/observation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(worldState)
+    });
+
+    const obsResult = await obsRes.json();
+    console.log("Observation sent:", obsResult);
+
+    const actionRes = await fetch("http://127.0.0.1:6060/last-action", {
+        method: "GET"
+    });
+
+    const actionData = await actionRes.json();
+    console.log("Received action:", actionData);
+
+    if (actionData.move) {
+        movePlayerDirection(actionData.move);
+    }
+
+    const resetRes = await fetch("http://127.0.0.1:6060/reset", {
+        method: "GET"
+    });
+
+    //TP to certain place in the
+    const resetData = await resetRes.json();  // <-- Fixed typo
+    if (resetData) {
+        getNetwork().playerHp(-1);
+    }
+
+} catch (err) {
+    console.error("AI server error:", err);
+}
+};
+
+
+
 const getWorld = () => {
     return window.gameRef.scene.keys.WORLD;
 };
@@ -793,11 +901,14 @@ const getPercent = (value, max) => {
             const { action, battler, group } = priorityAction;
             usePriorityAction(action, battler, group);
         }
+        //New
+        setInterval(sendWorldStateToAI, 5000); // every 2000ms
     };
 
     const battlerLoop = () => {
         try {
-            battlerTick(); 
+            battlerTick();
+            //logWorldStateForAI(); 
         } catch (err) {
             console.log(err);
         } 
